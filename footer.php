@@ -2,7 +2,7 @@
 </main>
   <footer class="text-center py-4 border-top mt-5 text-muted small">
     <p class="mb-1">&copy; <?= date('Y') ?> Kyle Vanderburg / Ives.App</p>
-    <p><a href="terms.php">Terms of Service</a></p>
+    <p><a href="terms.php">Terms of Service</a> | <a href="//github.com/kylevanderburg/Ives">Source</a></p>
   </footer>
 </body>
 </html>

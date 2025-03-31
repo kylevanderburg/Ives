@@ -34,7 +34,7 @@ if ($errors) {
     foreach ($errors as $error) {
         echo "<p style='color:red;'>$error</p>";
     }
-    echo "<a href='index.php'>Back to booking</a>";
+    echo "<a href='schedule.php'>Back to booking</a>";
     exit;
 }
 
@@ -49,7 +49,7 @@ foreach ($busy as $b) {
     if ($slotStart < $b['end'] && $slotEnd > $b['start']) {
         echo "<div class='container mt-5'>";
         echo "<div class='alert alert-danger'>That time is no longer available. Please choose a different slot.</div>";
-        echo "<a href='index.php?type=$type' class='btn btn-primary mt-2'>Return to booking</a>";
+        echo "<a href='schedule.php?type=$type' class='btn btn-primary mt-2'>Return to booking</a>";
         echo "</div>";
         exit;
     }
@@ -114,8 +114,8 @@ include 'header.php'; ?>
             <p>You’ll receive an email invitation shortly.</p>
         </div>
 
-        <a href="index.php?type=<?= urlencode($type) ?>" class="btn btn-outline-primary mt-3">Book Another Appointment</a>
+        <a href="schedule.php?type=<?= urlencode($type) ?>" class="btn btn-outline-primary mt-3">Book Another Appointment</a>
         <br>
-        <a href="index.php" class="text-muted d-block mt-2">Return to Home</a>
+        <a href="schedule.php" class="text-muted d-block mt-2">Return to Home</a>
     </div>
     <?php include 'footer.php'; ?>

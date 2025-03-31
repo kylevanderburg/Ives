@@ -23,6 +23,6 @@
 
     <p class="mt-4">If you have questions about these terms, please contact the system administrator.</p>
 
-    <a href="index.php" class="btn btn-outline-primary mt-3">Return to Scheduler</a>
+    <a href="schedule.php" class="btn btn-outline-primary mt-3">Return to Scheduler</a>
   </div>
   <?php include 'footer.php'; ?>

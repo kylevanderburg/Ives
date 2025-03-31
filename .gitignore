@@ -1,0 +1,12 @@
+# Ignore Composer vendor directory
+/vendor/
+
+# Ignore token storage
+/token/
+
+# Ignore local config
+config.php
+
+# Optional: ignore logs, environment files, etc.
+*.log
+.env

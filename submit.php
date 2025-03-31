@@ -88,7 +88,7 @@ EOD;
 }
 
 // Confirmation screen
-$appName = $config['app_name'] ?? 'MeetSheet';
+$appName = $config['app_name'] ?? 'Ives';
 $appLogo = $config['app_logo'] ?? null;
 $platformLabels = [
     'zoom' => 'Zoom Meeting',
@@ -99,12 +99,7 @@ $platformDisplay = $platformLabels[$platform] ?? ucfirst($platform);
 
 include 'header.php'; ?>
     <div class="container mt-5 text-center">
-        <?php if ($appLogo): ?>
-            <img src="<?= htmlspecialchars($appLogo) ?>" alt="Logo" style="max-height: 80px;" class="mb-3">
-        <?php endif; ?>
-        <h1 class="mb-4"><?= htmlspecialchars($appName) ?></h1>
-
-        <div class="alert alert-success shadow-sm">
+       <div class="alert alert-success shadow-sm">
             <h2 class="mb-3">You're booked!</h2>
             <p class="lead">
                 You have scheduled a <strong><?= htmlspecialchars($event['label']) ?></strong><br>

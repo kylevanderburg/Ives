@@ -7,6 +7,9 @@
 # Ignore local config
 config.php
 
+# Ignore User Configs
+/users/
+
 # Optional: ignore logs, environment files, etc.
 *.log
 .env

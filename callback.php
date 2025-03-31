@@ -34,8 +34,10 @@ $userResponse = $client->get('https://graph.microsoft.com/v1.0/me', [
 $userInfo = json_decode($userResponse->getBody(), true);
 $userEmail = strtolower($userInfo['mail'] ?? $userInfo['userPrincipalName'] ?? '');
 
+include 'header.php';
+
 // Allow only specific accounts to authorize
-$authorizedEmails = ['kyle.vanderburg@ndsu.edu', 'kyle@noteforge.com']; // <- your email(s) here
+$authorizedEmails = $config['authorized_emails'] ?? [];
 
 if (!in_array($userEmail, $authorizedEmails)) {
     echo "<h2>Access Denied</h2>";
@@ -45,7 +47,13 @@ if (!in_array($userEmail, $authorizedEmails)) {
 
 // Save token with expiration time
 $data['expires_at'] = time() + $data['expires_in'];
-file_put_contents('token.json', json_encode($data));
+if (!file_put_contents('token.json', json_encode($data))) {
+    echo "<div class='alert alert-danger'>Failed to save token file. Check write permissions.</div>";
+    exit;
+}
 
 echo "<h2>Authorization successful</h2>";
-echo "<p>The token has been saved and you're ready to accept bookings.</p>";
+echo "<div class='alert alert-success'>Authorization successful. You're ready to accept bookings.</div>";
+echo "<a href='index.php' class='btn btn-primary'>Go to Booking Page</a>";
+
+include 'footer.php';

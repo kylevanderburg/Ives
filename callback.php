@@ -8,9 +8,9 @@ if (!isset($_GET['code'])) {
     exit;
 }
 
-// Exchange authorization code for tokens
 $client = new \GuzzleHttp\Client();
 
+// Get token
 $response = $client->post("https://login.microsoftonline.com/{$config['tenant_id']}/oauth2/v2.0/token", [
     'form_params' => [
         'client_id' => $config['client_id'],
@@ -24,11 +24,9 @@ $response = $client->post("https://login.microsoftonline.com/{$config['tenant_id
 
 $data = json_decode($response->getBody(), true);
 
-// Get the authenticated user's email from Graph
+// Get user info
 $userResponse = $client->get('https://graph.microsoft.com/v1.0/me', [
-    'headers' => [
-        'Authorization' => 'Bearer ' . $data['access_token']
-    ]
+    'headers' => ['Authorization' => 'Bearer ' . $data['access_token']]
 ]);
 
 $userInfo = json_decode($userResponse->getBody(), true);
@@ -36,24 +34,24 @@ $userEmail = strtolower($userInfo['mail'] ?? $userInfo['userPrincipalName'] ?? '
 
 include 'header.php';
 
-// Allow only specific accounts to authorize
-$authorizedEmails = $config['authorized_emails'] ?? [];
-
-if (!in_array($userEmail, $authorizedEmails)) {
-    echo "<h2>Access Denied</h2>";
-    echo "<p>This calendar system is restricted. The email you logged in with (<strong>$userEmail</strong>) is not authorized to configure this account.</p>";
-    exit;
-}
-
-// Save token with expiration time
+// Save token per user
 $data['expires_at'] = time() + $data['expires_in'];
-if (!file_put_contents('token.json', json_encode($data))) {
-    echo "<div class='alert alert-danger'>Failed to save token file. Check write permissions.</div>";
+$tokenFile = 'token/' . preg_replace('/[^a-z0-9_\-\.]/i', '_', $userEmail) . '.json';
+
+if (!is_dir('token')) {
+    mkdir('token', 0755, true);
+}
+
+if (!file_put_contents($tokenFile, json_encode($data))) {
+    echo "<div class='alert alert-danger'>Failed to save token for $userEmail. Check permissions.</div>";
+    include 'footer.php';
     exit;
 }
 
-echo "<h2>Authorization successful</h2>";
-echo "<div class='alert alert-success'>Authorization successful. You're ready to accept bookings.</div>";
-echo "<a href='index.php' class='btn btn-primary'>Go to Booking Page</a>";
+echo "<div class='container mt-5 text-center'>";
+echo "<h2 class='mb-3'>Authorization Successful</h2>";
+echo "<p class='lead'>You're now ready to accept bookings as <strong>$userEmail</strong>.</p>";
+echo "<a href='/' class='btn btn-primary mt-3'>Return to Home</a>";
+echo "</div>";
 
 include 'footer.php';

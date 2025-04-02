@@ -3,6 +3,14 @@ require_once 'event_types.php';
 require_once 'outlook_graph.php';
 
 $config = require 'config.php';
+$users = require 'users.php';
+
+$username = $_POST['user'] ?? null;
+$userData = $users[$username] ?? null;
+$userEmail = $userData['email'] ?? null;
+$userLabel = $userData['label'] ?? $username;
+$userTypes = $userData['types'] ?? [];
+
 $eventTypes = getEventTypes();
 
 $errors = [];
@@ -18,6 +26,10 @@ if (!$type || !isset($eventTypes[$type])) {
     $errors[] = "Invalid appointment type.";
 }
 
+if (!$type || !in_array($type, $userTypes)) {
+    $errors[] = "Invalid appointment type for this user.";
+}
+
 if (!$slot || !DateTime::createFromFormat('Y-m-d g:i a', $slot)) {
     $errors[] = "Invalid time slot.";
 }
@@ -31,10 +43,14 @@ if (!in_array($platform, ['zoom', 'teams', 'in_person'])) {
 }
 
 if ($errors) {
+    include 'header.php';
+    echo "<div class='container mt-5'>";
     foreach ($errors as $error) {
-        echo "<p style='color:red;'>$error</p>";
+        echo "<div class='alert alert-danger'>$error</div>";
     }
-    echo "<a href='schedule.php'>Back to booking</a>";
+    echo "<a href='schedule.php' class='btn btn-outline-primary mt-3'>Back to booking</a>";
+    echo "</div>";
+    include 'footer.php';
     exit;
 }
 
@@ -44,12 +60,13 @@ $event = $eventTypes[$type];
 $slotEnd = (clone $slotStart)->modify("+{$event['duration']} minutes");
 
 // Final check: make sure slot isn't already booked
-$busy = getBusyTimesFromGraph($slotStart->format(DateTime::ATOM), $slotEnd->format(DateTime::ATOM));
+$busy = getBusyTimesFromGraph($slotStart->format(DateTime::ATOM), $slotEnd->format(DateTime::ATOM), $userEmail);
+
 foreach ($busy as $b) {
     if ($slotStart < $b['end'] && $slotEnd > $b['start']) {
         echo "<div class='container mt-5'>";
         echo "<div class='alert alert-danger'>That time is no longer available. Please choose a different slot.</div>";
-        echo "<a href='schedule.php?type=$type' class='btn btn-primary mt-2'>Return to booking</a>";
+        echo "<a href='/$username/$type' class='btn btn-primary mt-2'>Return to booking</a>";
         echo "</div>";
         exit;
     }
@@ -62,8 +79,10 @@ createGraphEvent(
     $slotEnd->format(DateTime::ATOM),
     $email,
     $name,
-    $platform
+    $platform,
+    $userEmail
 );
+
 
 // Send confirmation email to you
 $adminEmail = $config['notification_email'] ?? null;
@@ -84,7 +103,13 @@ Attendee: {$name} <{$email}>
 Platform: {$platformDisplay}
 EOD;
 
-    sendGraphEmail($adminEmail, "New {$event['label']} Booked", $bodyText);
+    //sendGraphEmail($adminEmail, "New {$event['label']} Booked", $bodyText);
+    sendGraphEmail(
+        $userEmail,                       // from this user's mailbox
+        $adminEmail,                     // send to you (the host)
+        "New {$event['label']} Booked",  // subject
+        $bodyText                        // body
+    );
 }
 
 // Confirmation screen
@@ -109,8 +134,8 @@ include 'header.php'; ?>
             <p>You’ll receive an email invitation shortly.</p>
         </div>
 
-        <a href="schedule.php?type=<?= urlencode($type) ?>" class="btn btn-outline-primary mt-3">Book Another Appointment</a>
+        <a href="/<?= urlencode($username) ?>/<?= urlencode($type) ?>" class="btn btn-outline-primary mt-3">Book Another Appointment</a>
         <br>
-        <a href="schedule.php" class="text-muted d-block mt-2">Return to Home</a>
+        <a href="/<?= urlencode($username) ?>" class="text-muted d-block mt-2">Return to Home</a>
     </div>
     <?php include 'footer.php'; ?>

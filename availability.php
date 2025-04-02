@@ -6,7 +6,7 @@ $config = require __DIR__ . '/config.php';
 date_default_timezone_set('America/Chicago');
 define('IVES_TIMEZONE', 'America/Chicago');
 
-function getAvailableSlotsForEventType($eventTypeKey) {
+function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
     $eventTypes = getEventTypes();
     $duration = $eventTypes[$eventTypeKey]['duration'] ?? 30;
 
@@ -19,7 +19,8 @@ function getAvailableSlotsForEventType($eventTypeKey) {
     // Step 2: Get busy times from Outlook (Microsoft Graph)
     $busyTimes = getBusyTimesFromGraph(
         $startDate->format(DateTime::ATOM),
-        $endDate->format(DateTime::ATOM)
+        $endDate->format(DateTime::ATOM),
+        $userEmail
     );
 
     // Step 3: Filter out overlapping slots

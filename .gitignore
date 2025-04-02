@@ -6,6 +6,7 @@
 
 # Ignore local config
 config.php
+users.php
 
 # Ignore User Configs
 /users/

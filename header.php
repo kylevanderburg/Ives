@@ -11,7 +11,7 @@
       display: inline-block;
       width: 64px;
       height: 64px;
-      background-image: url('ives.svg');
+      background-image: url('/ives.svg');
       background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
@@ -19,7 +19,7 @@
     }
 
     .logo-link:hover {
-      background-image: url('ives2.svg');
+      background-image: url('/ives2.svg');
     }
 
     @media (max-width: 576px) {

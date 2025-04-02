@@ -3,44 +3,52 @@ $config = require __DIR__ . '/config.php';
 require 'vendor/autoload.php';
 use GuzzleHttp\Client;
 
-function getAccessToken() {
-    $config = require 'config.php';
-    $tokenData = json_decode(file_get_contents('token/token.json'), true);
+// 🧠 Utility: Safe token filename based on email
+function getTokenPath($userEmail) {
+    return 'token/' . preg_replace('/[^a-z0-9_\-\.]/i', '_', strtolower($userEmail)) . '.json';
+}
 
+// ✅ Get or refresh access token for a given user
+function getAccessToken($userEmail) {
+    $tokenFile = getTokenPath($userEmail);
+
+    if (!file_exists($tokenFile)) {
+        throw new Exception("No token found for user: $userEmail");
+    }
+
+    $tokenData = json_decode(file_get_contents($tokenFile), true);
     $accessToken = $tokenData['access_token'];
-    $expiresAt = isset($tokenData['expires_at']) ? $tokenData['expires_at'] : 0;
+    $expiresAt = $tokenData['expires_at'] ?? 0;
 
-    // Check if token is expired (or about to)
     if (time() >= $expiresAt - 60) {
-        // Refresh it
-        $client = new \GuzzleHttp\Client();
-        $response = $client->post("https://login.microsoftonline.com/{$config['tenant_id']}/oauth2/v2.0/token", [
+        // Refresh token
+        $client = new Client();
+        $response = $client->post("https://login.microsoftonline.com/{$GLOBALS['config']['tenant_id']}/oauth2/v2.0/token", [
             'form_params' => [
                 'grant_type' => 'refresh_token',
                 'refresh_token' => $tokenData['refresh_token'],
-                'client_id' => $config['client_id'],
-                'client_secret' => $config['client_secret'],
-                'scope' => $config['scopes']
+                'client_id' => $GLOBALS['config']['client_id'],
+                'client_secret' => $GLOBALS['config']['client_secret'],
+                'scope' => $GLOBALS['config']['scopes']
             ]
         ]);
 
         $newToken = json_decode($response->getBody(), true);
-
-        // Compute new expiration time
         $newToken['expires_at'] = time() + $newToken['expires_in'];
-        file_put_contents('token/token.json', json_encode($newToken));
 
+        file_put_contents($tokenFile, json_encode($newToken));
         $accessToken = $newToken['access_token'];
     }
 
     return $accessToken;
 }
 
-function getBusyTimesFromGraph($start, $end) {
-    $token = getAccessToken();
-    $client = new \GuzzleHttp\Client();
+// ✅ Fetch busy time ranges for a user
+function getBusyTimesFromGraph($start, $end, $userEmail) {
+    $token = getAccessToken($userEmail);
+    $client = new Client();
 
-    $response = $client->get('https://graph.microsoft.com/v1.0/me/calendarView', [
+    $response = $client->get("https://graph.microsoft.com/v1.0/users/{$userEmail}/calendarView", [
         'headers' => ['Authorization' => "Bearer $token"],
         'query' => [
             'startDateTime' => $start,
@@ -56,74 +64,61 @@ function getBusyTimesFromGraph($start, $end) {
         $startUtc = new DateTime($event['start']['dateTime'], new DateTimeZone($event['start']['timeZone'] ?? 'UTC'));
         $endUtc = new DateTime($event['end']['dateTime'], new DateTimeZone($event['end']['timeZone'] ?? 'UTC'));
 
-        // Convert to Central Time
         $start = $startUtc->setTimezone(new DateTimeZone('America/Chicago'));
         $end = $endUtc->setTimezone(new DateTimeZone('America/Chicago'));
 
-        $busy[] = [
-            'start' => $start,
-            'end' => $end
-        ];
+        $busy[] = ['start' => $start, 'end' => $end];
     }
 
     return $busy;
 }
 
-function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName, $platform = 'zoom') {
-    $token = getAccessToken();
-    $client = new \GuzzleHttp\Client();
+// ✅ Create a calendar event for a user
+function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName, $platform, $userEmail) {
+    $token = getAccessToken($userEmail);
+    $client = new Client();
     $config = require __DIR__ . '/config.php';
 
-    $json = [
+    $eventData = [
         'subject' => $subject,
-        'start' => [
-            'dateTime' => $start,
-            'timeZone' => 'America/Chicago'
-        ],
-        'end' => [
-            'dateTime' => $end,
-            'timeZone' => 'America/Chicago'
-        ],
+        'start' => ['dateTime' => $start, 'timeZone' => 'America/Chicago'],
+        'end' => ['dateTime' => $end, 'timeZone' => 'America/Chicago'],
         'attendees' => [[
-            'emailAddress' => [
-                'address' => $attendeeEmail,
-                'name' => $attendeeName
-            ],
+            'emailAddress' => ['address' => $attendeeEmail, 'name' => $attendeeName],
             'type' => 'required'
         ]]
     ];
 
     if ($platform === 'zoom') {
-        $zoomLink = $config['zoom_link'];
-        $json['location'] = ['displayName' => 'Zoom Meeting'];
-        $json['body'] = [
+        $eventData['location'] = ['displayName' => 'Zoom Meeting'];
+        $eventData['body'] = [
             'contentType' => 'HTML',
-            'content' => "<p>Join via Zoom: <a href=\"$zoomLink\">$zoomLink</a></p>"
+            'content' => "<p>Join via Zoom: <a href=\"{$config['zoom_link']}\">{$config['zoom_link']}</a></p>"
         ];
     } elseif ($platform === 'teams') {
-        $json['isOnlineMeeting'] = true;
-        $json['onlineMeetingProvider'] = 'teamsForBusiness';
+        $eventData['isOnlineMeeting'] = true;
+        $eventData['onlineMeetingProvider'] = 'teamsForBusiness';
     } elseif ($platform === 'in_person') {
-        $json['location'] = ['displayName' => $config['in_person_location']];
-        $json['body'] = [
+        $eventData['location'] = ['displayName' => $config['in_person_location']];
+        $eventData['body'] = [
             'contentType' => 'HTML',
             'content' => "<p>This is an in-person meeting. Location: {$config['in_person_location']}.</p>"
         ];
     }
-    
 
-    $client->post('https://graph.microsoft.com/v1.0/me/events', [
+    $client->post("https://graph.microsoft.com/v1.0/users/{$userEmail}/events", [
         'headers' => [
             'Authorization' => "Bearer $token",
             'Content-Type' => 'application/json'
         ],
-        'json' => $json
+        'json' => $eventData
     ]);
 }
 
-function sendGraphEmail($toEmail, $subject, $bodyText) {
-    $token = getAccessToken();
-    $client = new \GuzzleHttp\Client();
+// ✅ Send an email using the user's mailbox
+function sendGraphEmail($fromEmail, $toEmail, $subject, $bodyText) {
+    $token = getAccessToken($fromEmail);
+    $client = new Client();
 
     $emailData = [
         'message' => [
@@ -133,15 +128,13 @@ function sendGraphEmail($toEmail, $subject, $bodyText) {
                 'content' => $bodyText
             ],
             'toRecipients' => [[
-                'emailAddress' => [
-                    'address' => $toEmail
-                ]
+                'emailAddress' => ['address' => $toEmail]
             ]]
         ],
         'saveToSentItems' => true
     ];
 
-    $client->post('https://graph.microsoft.com/v1.0/me/sendMail', [
+    $client->post("https://graph.microsoft.com/v1.0/users/{$fromEmail}/sendMail", [
         'headers' => [
             'Authorization' => "Bearer $token",
             'Content-Type' => 'application/json'

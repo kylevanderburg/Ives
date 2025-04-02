@@ -1,12 +1,24 @@
 <?php
 require_once 'event_types.php';
 require_once 'availability.php';
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+$users = require 'users.php';
+$config = require 'config.php';
 
-$eventTypes = getEventTypes();
+$username = $_GET['user'] ?? null;
+$userData = $users[$username] ?? null;
+$userEmail = $userData['email'] ?? null;
+$userLabel = $userData['label'] ?? $username;
+$userTypes = $userData['types'] ?? [];
+
+$allEventTypes = getEventTypes();
+
+// Filter only allowed event types for this user
+$eventTypes = array_filter($allEventTypes, fn($key) => in_array($key, $userTypes), ARRAY_FILTER_USE_KEY);
+
 $selectedType = $_GET['type'] ?? null;
-
-// If the selected type is missing or invalid
-if (!$selectedType || !array_key_exists($selectedType, $eventTypes)) {
+if (!in_array($selectedType, array_keys($eventTypes))) {
     $selectedType = null;
 }
 
@@ -20,41 +32,48 @@ include 'header.php'; ?>
         <div class="row justify-content-center">
             <div class="col-lg-6">
 
-                <?php if (!$selectedType): ?>
-                    <div class="text-center mb-4">
-                        <h1 class="display-5">Choose Appointment Type</h1>
-                        <p class="text-muted">Select the kind of appointment you'd like to book.</p>
-                    </div>
+                <?php if (!$selectedType) :
+                    echo "<div class='text-center mb-4'>";
+                    echo "<h1 class='display-5'>Choose Appointment Type</h1>";
+                    echo "<p class='text-muted'>Select the kind of appointment you'd like to book with {$userLabel}.</p>";
+                    echo "</div>";
 
-                    <div class="list-group">
-                        <?php foreach ($eventTypes as $key => $event): ?>
-                            <a href="?type=<?= htmlspecialchars($key) ?>" class="list-group-item list-group-item-action">
-                                <?= htmlspecialchars($event['label']) ?>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
+                    if (empty($eventTypes)) {
+                        echo "<div class='alert alert-warning'>No appointment types available.</div>";
+                    } else {
+                        echo "<div class='list-group'>";
+                        foreach ($eventTypes as $key => $event) {
+                            echo "<a href='/" . urlencode($username) . "/" . urlencode($key) . "' class='list-group-item list-group-item-action'>";
+                            echo htmlspecialchars($event['label']);
+                            echo "</a>";
+                        }
+                        echo "</div>";
+                    }
 
-                <?php else: ?>
+                    include 'footer.php';
+                    exit;
+                else: ?>
                     <?php
                         $eventLabel = $eventTypes[$selectedType]['label'];
-                        $slots = getAvailableSlotsForEventType($selectedType);
+                        $slots = getAvailableSlotsForEventType($selectedType, $userEmail);
                     ?>
 
                     <div class="text-center mb-4">
-                        <h1 class="display-5">Book a <?= htmlspecialchars($eventLabel) ?></h1>
+                        <h1 class="display-5">Book a <?= htmlspecialchars($eventLabel) ?> with <?= htmlspecialchars($userLabel) ?></h1>
                         <p class="text-muted">Select your time, enter your details, and choose your platform.</p>
                     </div>
 
                     <div class="card shadow-sm">
                         <div class="card-body">
-                            <form method="POST" action="submit.php">
+                            <form method="POST" action="/submit.php">
                                 <input type="hidden" name="type" value="<?= htmlspecialchars($selectedType) ?>">
 
                                 <div class="mb-3">
                                     <label class="form-label">Available Times</label>
                                     <div class="border rounded p-3 bg-white" style="max-height: 400px; overflow-y: auto;">
                                         <?php $slotId = 0; ?>
-                                        <?php foreach ($slots as $date => $times): ?>
+                                        <?php ksort($slots);
+                                        foreach ($slots as $date => $times): ?>
                                             <?php if (count($times) > 0): ?>
                                                 <div class="mb-3">
                                                 <strong><?= (new DateTime($date))->format('l, F j') ?></strong><br>
@@ -95,7 +114,7 @@ include 'header.php'; ?>
                                         <option value="teams">Microsoft Teams</option>
                                     </select>
                                 </div>
-
+                                <input type="hidden" name="user" value="<?= htmlspecialchars($username) ?>">
                                 <button type="submit" class="btn btn-primary w-100">Book Appointment</button>
                             </form>
                         </div>
@@ -106,7 +125,7 @@ include 'header.php'; ?>
                         <div class="list-group">
                             <?php foreach ($eventTypes as $key => $event): ?>
                                 <?php if ($key !== $selectedType): ?>
-                                    <a href="?type=<?= htmlspecialchars($key) ?>" class="list-group-item list-group-item-action">
+                                    <a href="/<?= urlencode($username) ?>/<?= urlencode($key) ?>" class="list-group-item list-group-item-action">
                                         <?= htmlspecialchars($event['label']) ?>
                                     </a>
                                 <?php endif; ?>

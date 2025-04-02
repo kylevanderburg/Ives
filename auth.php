@@ -18,10 +18,6 @@ $authUrl = 'https://login.microsoftonline.com/' . $tenantId . '/oauth2/v2.0/auth
     <div class="container text-center mt-5">
         <h1 class="mb-4">Authorize This Booking System</h1>
         <p class="lead">Click below to log in with your Microsoft account and connect your calendar.</p>
-        <p class="mb-0">
-            <a href="terms.php" class="d-block d-sm-inline">Terms of Service</a>
-            <span class="d-none d-sm-inline"> | </span>
-            <a href="//github.com/kylevanderburg/Ives" class="d-block d-sm-inline">Source</a>
-        </p>
+        <a href="<?= htmlspecialchars($authUrl) ?>" class="btn btn-primary btn-lg mt-3">Log In with Microsoft</a>
     </div>
 <?php include 'footer.php'; ?>

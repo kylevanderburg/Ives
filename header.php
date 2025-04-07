@@ -31,14 +31,71 @@
         font-size: 0.9rem;
       }
     }
+
+    @media (prefers-color-scheme: dark) {
+      /* body {
+        background-color: #121212;
+        color: #777777;
+      } */
+
+      /* .logo-link{
+        -webkit-filter: invert(100%); safari 6.0 - 9.0
+        filter: invert(100%);
+      } */
+
+      /* .bg-white {
+        background-color: #1e1e1e !important;
+        color: #fff;
+      }
+
+      .border-bottom, .border-top {
+        border-color: #333 !important;
+      }
+
+      .btn-outline-primary {
+        color: #90caf9;
+        border-color: #90caf9;
+      }
+
+      .btn-outline-primary:hover {
+        background-color: #90caf9;
+        color: #000;
+      }
+
+      .form-control,
+      .form-select {
+        background-color: #2c2c2c;
+        color: #eaeaea;
+        border-color: #555;
+      }
+
+      .card {
+        background-color: #1e1e1e;
+        border-color: #444;
+      }
+
+      .alert-success {
+        background-color: #2e7d32;
+        color: #fff;
+      }
+
+      .alert-danger {
+        background-color: #c62828;
+        color: #fff;
+      }
+
+      .text-muted {
+        color: #aaa !important;
+      } */
+    }
   </style>
 </head>
 <body class="bg-light">
   <header class="py-4 text-center border-bottom bg-white mb-4">
-    <a href="/" class="logo-link d-inline-block mx-auto" aria-label="Ives Home"></a>
+    <a href="/" class="logo-link d-inline-block mx-auto" aria-label="Ives Home" title="Ives Logo"></a>
     <h1 class="h3 mt-2 mb-0">Ives</h1>
     <p class="text-muted fst-italic mb-0">Compose Your Calendar</p>
   </header>
 
   <main class="container px-3 px-md-4">
-    <div class="alert alert-warning small text-center">This app is currently in development mode.</div>
+    <!--<div class="alert alert-warning small text-center">This app is currently in development mode.</div>-->

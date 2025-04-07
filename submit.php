@@ -46,7 +46,7 @@ if ($errors) {
     include 'header.php';
     echo "<div class='container mt-5'>";
     foreach ($errors as $error) {
-        echo "<div class='alert alert-danger'>$error</div>";
+        echo "<div class='alert alert-danger'aria-live='assertive'>$error</div>";
     }
     echo "<a href='schedule.php' class='btn btn-outline-primary mt-3'>Back to booking</a>";
     echo "</div>";
@@ -65,7 +65,7 @@ $busy = getBusyTimesFromGraph($slotStart->format(DateTime::ATOM), $slotEnd->form
 foreach ($busy as $b) {
     if ($slotStart < $b['end'] && $slotEnd > $b['start']) {
         echo "<div class='container mt-5'>";
-        echo "<div class='alert alert-danger'>That time is no longer available. Please choose a different slot.</div>";
+        echo "<div class='alert alert-danger' aria-live='assertive'>That time is no longer available. Please choose a different slot.</div>";
         echo "<a href='/$username/$type' class='btn btn-primary mt-2'>Return to booking</a>";
         echo "</div>";
         exit;
@@ -124,7 +124,7 @@ $platformDisplay = $platformLabels[$platform] ?? ucfirst($platform);
 
 include 'header.php'; ?>
     <div class="container mt-5 text-center">
-       <div class="alert alert-success shadow-sm">
+       <div class="alert alert-success shadow-sm" aria-live="polite">
             <h2 class="mb-3">You're booked!</h2>
             <p class="lead">
                 You have scheduled a <strong><?= htmlspecialchars($event['label']) ?></strong><br>

@@ -25,7 +25,7 @@ function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
 
     // Step 3: Filter out overlapping slots
     $filtered = filterSlotsAgainstBusyTimes($slots, $busyTimes, $duration);
-    /*echo "<h2 style='margin-top:2em;'>🔍 Debug: Raw Slot Availability</h2><pre>";
+    echo "<h2 style='margin-top:2em;'>🔍 Debug: Raw Slot Availability</h2><pre>";
     print_r($slots);
     echo "</pre>";
     
@@ -40,7 +40,7 @@ function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
     print_r($filtered);
     echo "</pre>";
     
-    exit;*/
+    exit;
     return $filtered;
 }
 
@@ -86,7 +86,7 @@ function generateTimeSlots(DateTime $start, DateTime $end, int $duration) {
 
 // Remove any slots that overlap with existing Outlook events
 function filterSlotsAgainstBusyTimes($slots, $busyTimes, $duration) {
-    $debug = false; // Set to false later to turn this off
+    $debug = true; // Set to false later to turn this off
 
     foreach ($slots as $date => &$dailySlots) {
         $dailySlots = array_filter($dailySlots, function ($slot) use ($busyTimes, $duration, $debug) {

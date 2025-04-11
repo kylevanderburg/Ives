@@ -11,7 +11,6 @@ function getTokenPath($userEmail) {
 // ✅ Get or refresh access token for a given user
 function getAccessToken($userEmail) {
     $tokenFile = getTokenPath($userEmail);
-
     if (!file_exists($tokenFile)) {
         throw new Exception("No token found for user: $userEmail");
     }
@@ -53,7 +52,9 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
         'query' => [
             'startDateTime' => $start,
             'endDateTime' => $end,
-            '$select' => 'start,end'
+            '$select' => 'start,end,subject',
+            '$orderby' => 'start/dateTime',
+            '$top' => 1000
         ]
     ]);
 
@@ -67,7 +68,7 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
         $start = $startUtc->setTimezone(new DateTimeZone('America/Chicago'));
         $end = $endUtc->setTimezone(new DateTimeZone('America/Chicago'));
 
-        $busy[] = ['start' => $start, 'end' => $end];
+        $busy[] = ['start' => $start, 'end' => $end, 'subject' => $event['subject'] ?? '(No Title)'];
     }
 
     return $busy;

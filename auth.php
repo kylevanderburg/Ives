@@ -7,7 +7,7 @@ $params = [
     'redirect_uri' => $config['redirect_uri'],
     'response_mode' => 'query',
     'scope' => $config['scopes'],
-    'prompt' => 'consent'
+    //'prompt' => 'consent'
 ];
 
 $tenantId = $config['tenant_id'] ?? 'common';

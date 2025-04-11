@@ -28,14 +28,15 @@ include 'header.php'; ?>
     <div class="container text-center mt-4 mb-4">
         <p class="text-muted small">Schedule your meeting below</p>
     </div>
-    <div class="container py-5">
+    <div class="container py-2">
         <div class="row justify-content-center">
             <div class="col-lg-6">
 
                 <?php if (!$selectedType) :
                     echo "<div class='text-center mb-4'>";
-                    echo "<h1 class='display-5'>Choose Appointment Type</h1>";
-                    echo "<p class='text-muted'>Select the kind of appointment you'd like to book with {$userLabel}.</p>";
+                    echo "<h1 class='display-4'>{$userLabel}</h1>";
+                    echo "<h2 class='display-5'>Choose Appointment Type</h2>";
+                    echo "<p class='text-muted'>Select the kind of appointment you'd like to book.</p>";
                     echo "</div>";
 
                     if (empty($eventTypes)) {

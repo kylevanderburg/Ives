@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ives — Compose Your Calendar</title>
+  <link rel="preload" as="image" href="/ives2.svg">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     .logo-link {
@@ -87,14 +88,22 @@
       .text-muted {
         color: #aaa !important;
       } */
+      /* Preload hover image */
+      body::after {
+        content: "";
+        display: none;
+        background-image: url('/ives2.svg');
+      }
     }
   </style>
 </head>
 <body class="bg-light">
-  <header class="py-4 text-center border-bottom bg-white mb-4">
-    <a href="/" class="logo-link d-inline-block mx-auto" aria-label="Ives Home" title="Ives Logo"></a>
-    <h1 class="h3 mt-2 mb-0">Ives</h1>
-    <p class="text-muted fst-italic mb-0">Compose Your Calendar</p>
+  <header class="d-flex align-items-center justify-content-center py-2 border-bottom bg-white mb-3">
+    <a href="/" class="logo-link me-2" aria-label="Ives Home" title="Ives Logo"></a>
+    <div class="text-start">
+      <h1 class="h5 mb-0">Ives</h1>
+      <p class="text-muted fst-italic mb-0 small">Compose Your Calendar</p>
+    </div>
   </header>
 
   <main class="container px-3 px-md-4">

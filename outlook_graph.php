@@ -39,16 +39,19 @@ function getAccessToken($userEmail) {
         $accessToken = $newToken['access_token'];
     }
 
-    return $accessToken;
+    $tokenData['access_token'] = $accessToken;
+    $tokenData['scopes'] = explode(' ', $tokenData['scope'] ?? '');
+    return $tokenData;
 }
 
 // ✅ Fetch busy time ranges for a user
 function getBusyTimesFromGraph($start, $end, $userEmail) {
-    $token = getAccessToken($userEmail);
+    $tokenData = getAccessToken($userEmail);
+    $accessToken = $tokenData['access_token'];
     $client = new Client();
 
     $response = $client->get("https://graph.microsoft.com/v1.0/users/{$userEmail}/calendarView", [
-        'headers' => ['Authorization' => "Bearer $token"],
+        'headers' => ['Authorization' => "Bearer $accessToken"],
         'query' => [
             'startDateTime' => $start,
             'endDateTime' => $end,
@@ -76,7 +79,8 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
 
 // ✅ Create a calendar event for a user
 function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName, $platform, $userEmail) {
-    $token = getAccessToken($userEmail);
+    $tokenData = getAccessToken($userEmail);
+    $accessToken = $tokenData['access_token'];
     $client = new Client();
     $config = require __DIR__ . '/config.php';
 
@@ -87,6 +91,13 @@ function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName,
         'attendees' => [[
             'emailAddress' => ['address' => $attendeeEmail, 'name' => $attendeeName],
             'type' => 'required'
+        ],
+        [
+            'emailAddress' => [
+                'address' => $userEmail,
+                'name' => $config['app_name'] ?? 'Calendar Owner'
+            ],
+            'type' => 'optional'
         ]]
     ];
 
@@ -109,7 +120,7 @@ function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName,
 
     $client->post("https://graph.microsoft.com/v1.0/users/{$userEmail}/events", [
         'headers' => [
-            'Authorization' => "Bearer $token",
+            'Authorization' => "Bearer $accessToken",
             'Content-Type' => 'application/json'
         ],
         'json' => $eventData
@@ -118,8 +129,18 @@ function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName,
 
 // ✅ Send an email using the user's mailbox
 function sendGraphEmail($fromEmail, $toEmail, $subject, $bodyText) {
-    $token = getAccessToken($fromEmail);
-    $client = new Client();
+    $config = require __DIR__ . '/config.php';
+    $client = new \GuzzleHttp\Client();
+    $tokenData = getAccessToken($fromEmail);
+
+    // Check if token includes Mail.Send
+    if (!in_array('Mail.Send', $tokenData['scopes'])) {
+        // Fallback to Postmark
+        sendAdminEmail($toEmail, $subject, $bodyText);
+        return;
+    }
+
+    $accessToken = $tokenData['access_token'];
 
     $emailData = [
         'message' => [
@@ -129,17 +150,44 @@ function sendGraphEmail($fromEmail, $toEmail, $subject, $bodyText) {
                 'content' => $bodyText
             ],
             'toRecipients' => [[
-                'emailAddress' => ['address' => $toEmail]
+                'emailAddress' => [
+                    'address' => $toEmail
+                ]
             ]]
         ],
         'saveToSentItems' => true
     ];
 
-    $client->post("https://graph.microsoft.com/v1.0/users/{$fromEmail}/sendMail", [
-        'headers' => [
-            'Authorization' => "Bearer $token",
-            'Content-Type' => 'application/json'
-        ],
-        'json' => $emailData
-    ]);
+    try {
+        $client->post('https://graph.microsoft.com/v1.0/me/sendMail', [
+            'headers' => [
+                'Authorization' => "Bearer $accessToken",
+                'Content-Type' => 'application/json'
+            ],
+            'json' => $emailData
+        ]);
+    } catch (Exception $e) {
+        error_log("Graph email failed: " . $e->getMessage());
+        sendAdminEmail($toEmail, $subject, $bodyText);
+    }
+}
+
+
+function sendAdminEmail($toEmail, $subject, $bodyText) {
+    $config = require __DIR__ . '/config.php';
+    $client = new \Postmark\PostmarkClient($config['postmark_token']);
+
+    try {
+        $client->sendEmail(
+            $config['postmark_from'],
+            $toEmail,
+            $subject,
+            $bodyText,
+            null, // optional HTML body
+            null, // tag
+            true  // track opens
+        );
+    } catch (Exception $e) {
+        error_log("Postmark send failed: " . $e->getMessage());
+    }
 }

@@ -1,4 +1,8 @@
 <?php
+
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
 require_once 'event_types.php';
 require_once 'outlook_graph.php';
 
@@ -85,7 +89,8 @@ createGraphEvent(
 
 
 // Send confirmation email to you
-$adminEmail = $config['notification_email'] ?? null;
+// $adminEmail = $config['notification_email'] ?? null;
+$adminEmail = $userData['email'] ?? $userEmail;
 if ($adminEmail) {
     $platformLabels = [
         'zoom' => 'Zoom Meeting',

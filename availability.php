@@ -7,6 +7,7 @@ date_default_timezone_set('America/Chicago');
 define('IVES_TIMEZONE', 'America/Chicago');
 
 function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
+    $debug = false;
     $eventTypes = getEventTypes();
     $duration = $eventTypes[$eventTypeKey]['duration'] ?? 30;
 
@@ -25,22 +26,24 @@ function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
 
     // Step 3: Filter out overlapping slots
     $filtered = filterSlotsAgainstBusyTimes($slots, $busyTimes, $duration);
-    /*echo "<h2 style='margin-top:2em;'>🔍 Debug: Raw Slot Availability</h2><pre>";
-    print_r($slots);
-    echo "</pre>";
-    
-    echo "<h2>🗓 Busy Times from Outlook Graph</h2><pre>";
-    print_r(array_map(fn($b) => [
-        'start' => $b['start']->format('Y-m-d H:i'),
-        'end' => $b['end']->format('Y-m-d H:i'),
-    ], $busyTimes));
-    echo "</pre>";
-    
-    echo "<h2>✅ Final Filtered Slots</h2><pre>";
-    print_r($filtered);
-    echo "</pre>";
-    
-    exit;*/
+    if($debug){
+        echo "<h2 style='margin-top:2em;'>🔍 Debug: Raw Slot Availability</h2><pre>";
+        print_r($slots);
+        echo "</pre>";
+        
+        echo "<h2>🗓 Busy Times from Outlook Graph</h2><pre>";
+        print_r(array_map(fn($b) => [
+            'start' => $b['start']->format('Y-m-d H:i'),
+            'end' => $b['end']->format('Y-m-d H:i'),
+        ], $busyTimes));
+        echo "</pre>";
+        
+        echo "<h2>✅ Final Filtered Slots</h2><pre>";
+        print_r($filtered);
+        echo "</pre>";
+        
+        exit;
+    }
     return $filtered;
 }
 
@@ -86,7 +89,7 @@ function generateTimeSlots(DateTime $start, DateTime $end, int $duration) {
 
 // Remove any slots that overlap with existing Outlook events
 function filterSlotsAgainstBusyTimes($slots, $busyTimes, $duration) {
-    $debug = false; // Set to false later to turn this off
+    $debug = false;
 
     foreach ($slots as $date => &$dailySlots) {
         $dailySlots = array_filter($dailySlots, function ($slot) use ($busyTimes, $duration, $debug) {

@@ -55,7 +55,7 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
         'query' => [
             'startDateTime' => $start,
             'endDateTime' => $end,
-            '$select' => 'start,end,subject',
+            '$select' => 'start,end,subject,showAs',
             '$orderby' => 'start/dateTime',
             '$top' => 1000
         ]
@@ -65,13 +65,23 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
     $busy = [];
 
     foreach ($data['value'] as $event) {
+        // Skip events marked as "free"
+        if (isset($event['showAs']) && strtolower($event['showAs']) === 'free') {
+            continue;
+        }
+    
         $startUtc = new DateTime($event['start']['dateTime'], new DateTimeZone($event['start']['timeZone'] ?? 'UTC'));
         $endUtc = new DateTime($event['end']['dateTime'], new DateTimeZone($event['end']['timeZone'] ?? 'UTC'));
-
+    
         $start = $startUtc->setTimezone(new DateTimeZone('America/Chicago'));
         $end = $endUtc->setTimezone(new DateTimeZone('America/Chicago'));
-
-        $busy[] = ['start' => $start, 'end' => $end, 'subject' => $event['subject'] ?? '(No Title)'];
+    
+        $busy[] = [
+            'start' => $start,
+            'end' => $end,
+            'subject' => $event['subject'] ?? '(No Title)',
+            'showAs' => $event['showAs'] ?? 'unknown'
+        ];
     }
 
     return $busy;

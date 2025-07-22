@@ -6,7 +6,7 @@ ini_set('display_errors', '1');
 $users = require 'users.php';
 $config = require 'config.php';
 
-$username = $_GET['user'] ?? null;
+$username = strtolower($_GET['user']) ?? null;
 $userData = $users[$username] ?? null;
 $userEmail = $userData['email'] ?? null;
 $userLabel = $userData['label'] ?? $username;

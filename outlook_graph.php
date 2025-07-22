@@ -185,19 +185,24 @@ function sendGraphEmail($fromEmail, $toEmail, $subject, $bodyText) {
 
 function sendAdminEmail($toEmail, $subject, $bodyText) {
     $config = require __DIR__ . '/config.php';
-    $client = new \Postmark\PostmarkClient($config['postmark_token']);
+    $client = new \GuzzleHttp\Client();
+
+    $postData = [
+        'to'      => $toEmail,
+        'from'    => $config['postal_from'],  // e.g. 'scheduling@example.com'
+        'subject' => $subject,
+        'plain_body' => $bodyText,
+    ];
 
     try {
-        $client->sendEmail(
-            $config['postmark_from'],
-            $toEmail,
-            $subject,
-            $bodyText,
-            null, // optional HTML body
-            null, // tag
-            true  // track opens
-        );
+        $response = $client->post($config['postal_api_url'], [
+            'headers' => [
+                'X-Server-API-Key' => $config['postal_api_key'],
+                'Accept' => 'application/json',
+            ],
+            'json' => $postData
+        ]);
     } catch (Exception $e) {
-        error_log("Postmark send failed: " . $e->getMessage());
+        error_log("Postal send failed: " . $e->getMessage());
     }
 }

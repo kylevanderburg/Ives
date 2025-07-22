@@ -2,6 +2,5 @@
     "require": {
         "sabre/vobject": "^4.5",
         "guzzlehttp/guzzle": "^7.9",
-        "wildbit/postmark-php": "^6.0"
     }
 }

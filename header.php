@@ -1,11 +1,18 @@
+<?php
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+?>
 <!-- header.php -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <title>Ives — Compose Your Calendar</title>
-  <link rel="preload" as="image" href="/ives2.svg">
+  <?php $BASE = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/'); ?>
+  <link rel="preload" as="image" href="<?= $BASE ?>/ives2.svg">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     .logo-link {
@@ -33,68 +40,11 @@
       }
     }
 
-    @media (prefers-color-scheme: dark) {
-      /* body {
-        background-color: #121212;
-        color: #777777;
-      } */
-
-      /* .logo-link{
-        -webkit-filter: invert(100%); safari 6.0 - 9.0
-        filter: invert(100%);
-      } */
-
-      /* .bg-white {
-        background-color: #1e1e1e !important;
-        color: #fff;
-      }
-
-      .border-bottom, .border-top {
-        border-color: #333 !important;
-      }
-
-      .btn-outline-primary {
-        color: #90caf9;
-        border-color: #90caf9;
-      }
-
-      .btn-outline-primary:hover {
-        background-color: #90caf9;
-        color: #000;
-      }
-
-      .form-control,
-      .form-select {
-        background-color: #2c2c2c;
-        color: #eaeaea;
-        border-color: #555;
-      }
-
-      .card {
-        background-color: #1e1e1e;
-        border-color: #444;
-      }
-
-      .alert-success {
-        background-color: #2e7d32;
-        color: #fff;
-      }
-
-      .alert-danger {
-        background-color: #c62828;
-        color: #fff;
-      }
-
-      .text-muted {
-        color: #aaa !important;
-      } */
-      /* Preload hover image */
       body::after {
         content: "";
         display: none;
         background-image: url('/ives2.svg');
       }
-    }
   </style>
 </head>
 <body class="bg-light">

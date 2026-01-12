@@ -1,21 +1,25 @@
 <?php
+require_once 'bootstrap.php';
 require_once 'event_types.php';
 require_once 'outlook_graph.php';
-$config = require __DIR__ . '/config.php';
 
-date_default_timezone_set('America/Chicago');
-define('IVES_TIMEZONE', 'America/Chicago');
-
-function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
+function getAvailableSlotsForEventType($eventTypeKey, $userEmail, ?string $hostTzName = null) {
     $debug = false;
     $eventTypes = getEventTypes();
     $duration = $eventTypes[$eventTypeKey]['duration'] ?? 30;
 
-    $startDate = new DateTime('now', new DateTimeZone(IVES_TIMEZONE));
+    $minNotice = (int)($eventTypes[$eventTypeKey]['min_notice_minutes'] ?? 0);
+    $hostTzName = $hostTzName ?: IVES_TIMEZONE;
+    $hostTz = new DateTimeZone($hostTzName);
+
+    $startDate = new DateTime('now', $hostTz);
+    if ($minNotice > 0) {
+        $startDate->modify("+{$minNotice} minutes");
+    }
     $endDate = (clone $startDate)->modify('+30 days');
 
     // Step 1: Generate static availability
-    $slots = generateTimeSlots($startDate, $endDate, $duration);
+    $slots = generateTimeSlots($startDate, $endDate, $duration, $hostTzName);
 
     // Step 2: Get busy times from Outlook (Microsoft Graph)
     $busyTimes = getBusyTimesFromGraph(
@@ -48,35 +52,26 @@ function getAvailableSlotsForEventType($eventTypeKey, $userEmail) {
 }
 
 // Generate time slots for weekdays only
-function generateTimeSlots(DateTime $start, DateTime $end, int $duration) {
+function generateTimeSlots(DateTime $start, DateTime $end, int $duration, string $hostTzName) {
     global $config;
     $slots = [];
-    $now = new DateTime('now', new DateTimeZone(IVES_TIMEZONE));
+    $hostTz = new DateTimeZone($hostTzName);
+    $now = new DateTime('now', $hostTz);
 
     for ($day = clone $start; $day <= $end; $day->modify('+1 day')) {
-        // Skip weekends
-        if (in_array($day->format('N'), [6, 7])) {
-            continue;
-        }
+        if (in_array($day->format('N'), [6,7], true)) continue;
 
         $date = $day->format('Y-m-d');
         $dailySlots = [];
 
         for ($hour = $config['workday_start_hour']; $hour < $config['workday_end_hour']; $hour++) {
             for ($minute = 0; $minute < 60; $minute += $duration) {
-                $slot = DateTime::createFromFormat(
-                    'Y-m-d H:i',
-                    "$date " . str_pad($hour, 2, '0', STR_PAD_LEFT) . ':' . str_pad($minute, 2, '0', STR_PAD_LEFT),
-                    new DateTimeZone(IVES_TIMEZONE)
-                );
+                $slot = DateTime::createFromFormat('Y-m-d H:i', "$date " . str_pad($hour,2,'0',STR_PAD_LEFT) . ':' . str_pad($minute,2,'0',STR_PAD_LEFT), $hostTz);
 
-                // Skip past times today
-                if ($date === $now->format('Y-m-d') && $slot < $now) {
-                    continue;
-                }
+                if ($date === $now->format('Y-m-d') && $slot < $now) continue;
 
                 if ($slot !== false) {
-                    $dailySlots[] = $slot->format('Y-m-d g:i a');
+                    $dailySlots[] = (clone $slot)->setTimezone(new DateTimeZone('UTC'))->format(DateTime::ATOM);
                 }
             }
         }
@@ -87,14 +82,16 @@ function generateTimeSlots(DateTime $start, DateTime $end, int $duration) {
     return $slots;
 }
 
+
 // Remove any slots that overlap with existing Outlook events
 function filterSlotsAgainstBusyTimes($slots, $busyTimes, $duration) {
     $debug = false;
 
     foreach ($slots as $date => &$dailySlots) {
         $dailySlots = array_filter($dailySlots, function ($slot) use ($busyTimes, $duration, $debug) {
-            $slotStart = DateTime::createFromFormat('Y-m-d g:i a', $slot, new DateTimeZone('America/Chicago'));
-            $slotEnd = (clone $slotStart)->modify("+$duration minutes");
+            $slotStart = new DateTimeImmutable($slot, new DateTimeZone('UTC')); // ISO UTC
+            $slotEnd   = $slotStart->modify("+$duration minutes");
+
 
             foreach ($busyTimes as $busy) {
                 if ($slotStart < $busy['end'] && $slotEnd > $busy['start']) {

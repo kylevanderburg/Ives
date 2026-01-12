@@ -1,17 +1,32 @@
 <?php
-
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
+require_once __DIR__ . '/bootstrap.php';
 require_once 'event_types.php';
 require_once 'outlook_graph.php';
 
-$config = require 'config.php';
 $users = require 'users.php';
 
-$username = $_POST['user'] ?? null;
-$userData = $users[$username] ?? null;
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+  include 'header.php';
+  echo "<div class='container mt-5'><div class='alert alert-warning'>This page is only used to submit bookings. Please return to the scheduler.</div></div>";
+  include 'footer.php';
+  exit;
+}
+
+
+$username = isset($_POST['user']) ? strtolower($_POST['user']) : null;
+if (!$username || !isset($users[$username])) {
+    http_response_code(404);
+    echo "User not found.";
+    exit;
+}
+$userData = $users[$username];
 $userEmail = $userData['email'] ?? null;
+if (!$userEmail) {
+    http_response_code(500);
+    echo "User misconfigured.";
+    exit;
+}
+
 $userLabel = $userData['label'] ?? $username;
 $userTypes = $userData['types'] ?? [];
 
@@ -19,55 +34,100 @@ $eventTypes = getEventTypes();
 
 $errors = [];
 
+
 // Sanitize input
-$type = $_POST['type'] ?? null;
+$type = isset($_POST['type']) ? strtolower($_POST['type']) : null;
 $slot = $_POST['slot'] ?? null;
 $name = trim($_POST['name'] ?? '');
 $email = trim($_POST['email'] ?? '');
 $platform = $_POST['platform'] ?? 'in_person';
+$exp = isset($_POST['exp']) ? (int)$_POST['exp'] : 0;
+$sig = $_POST['sig'] ?? '';
 
 if (!$type || !isset($eventTypes[$type])) {
     $errors[] = "Invalid appointment type.";
 }
 
-if (!$type || !in_array($type, $userTypes)) {
+if (!$type || !in_array($type, $userTypes,true)) {
     $errors[] = "Invalid appointment type for this user.";
 }
 
-if (!$slot || !DateTime::createFromFormat('Y-m-d g:i a', $slot)) {
+$slotStart = null;
+if (!$slot) {
     $errors[] = "Invalid time slot.";
+} else {
+    try {
+        $slotStart = new DateTimeImmutable($slot); // expects ISO/RFC3339
+    } catch (Exception $e) {
+        $errors[] = "Invalid time slot.";
+    }
 }
 
 if (!$name || !$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $errors[] = "Please provide a valid name and email.";
 }
 
-if (!in_array($platform, ['zoom', 'teams', 'in_person'])) {
+if (!in_array($platform, ['zoom', 'teams', 'in_person'],true)) {
     $errors[] = "Invalid meeting platform.";
+}
+
+$signKey = $config['slot_signing_key'] ?? null;
+if (!$signKey) {
+  http_response_code(500);
+  echo "Server misconfigured.";
+  exit;
+}
+
+$now = time();
+if (!$exp || $exp < $now - 30) {
+  $errors[] = "Booking session expired. Please refresh and try again.";
+}
+
+if (!$sig || !preg_match('/^[a-f0-9]{64}$/', $sig)) {
+  $errors[] = "Invalid booking signature.";
+}
+
+$payload = $username . '|' . $type . '|' . $slot . '|' . $exp;
+$expected = hash_hmac('sha256', $payload, $signKey);
+
+if (!hash_equals($expected, $sig)) {
+  $errors[] = "Invalid booking signature.";
 }
 
 if ($errors) {
     include 'header.php';
     echo "<div class='container mt-5'>";
     foreach ($errors as $error) {
-        echo "<div class='alert alert-danger'aria-live='assertive'>$error</div>";
+        echo "<div class='alert alert-danger' aria-live='assertive'>" . htmlspecialchars($error) . "</div>";
     }
-    echo "<a href='schedule.php' class='btn btn-outline-primary mt-3'>Back to booking</a>";
+    echo "<a href='/" . urlencode($username ?? '') . "' class='btn btn-outline-primary mt-3'>Back to booking</a>";
     echo "</div>";
     include 'footer.php';
     exit;
 }
 
 // Convert slot to DateTime objects
-$slotStart = DateTime::createFromFormat('Y-m-d g:i a', $slot, new DateTimeZone('America/Chicago'));
+$userTzName = $userData['timezone'] ?? ($config['timezone'] ?? 'America/Chicago');
+$tz = new DateTimeZone($userTzName);
+
+$viewerTzName = $_POST['viewer_tz'] ?? null;
+$displayTz = $tz;
+if ($viewerTzName) { try { $displayTz = new DateTimeZone($viewerTzName); } catch (Exception $e) {} }
+
+$slotDisplay = $slotStart->setTimezone($displayTz)->format('l, F j, g:i a T');
+
 $event = $eventTypes[$type];
-$slotEnd = (clone $slotStart)->modify("+{$event['duration']} minutes");
+$slotEnd = $slotStart->modify("+{$event['duration']} minutes");
 
 // Final check: make sure slot isn't already booked
 $busy = getBusyTimesFromGraph($slotStart->format(DateTime::ATOM), $slotEnd->format(DateTime::ATOM), $userEmail);
 
+
 foreach ($busy as $b) {
-    if ($slotStart < $b['end'] && $slotEnd > $b['start']) {
+    $bs = $b['start'] instanceof DateTimeInterface ? $b['start'] : new DateTimeImmutable($b['start']);
+    $be = $b['end']   instanceof DateTimeInterface ? $b['end']   : new DateTimeImmutable($b['end']);
+
+    if ($slotStart < $be && $slotEnd > $bs) {
         echo "<div class='container mt-5'>";
         echo "<div class='alert alert-danger' aria-live='assertive'>That time is no longer available. Please choose a different slot.</div>";
         echo "<a href='/$username/$type' class='btn btn-primary mt-2'>Return to booking</a>";
@@ -76,20 +136,29 @@ foreach ($busy as $b) {
     }
 }
 
-// Book the appointment
+$guestNameSafe = preg_replace('/[\r\n\t]+/', ' ', $name);
+$guestNameSafe = trim($guestNameSafe);
+$subject = sprintf('%s — %s with %s', $event['label'], $guestNameSafe, $userLabel);
+// Build event times in the HOST timezone (wall clock)
+$slotStartHost = $slotStart->setTimezone($tz);
+$slotEndHost   = $slotEnd->setTimezone($tz);
+
+// Graph wants a "local" datetime string + a Windows timezone ID
+$startLocal = $slotStartHost->format('Y-m-d\TH:i:s');
+$endLocal   = $slotEndHost->format('Y-m-d\TH:i:s');
+
 createGraphEvent(
-    $event['label'],
-    $slotStart->format(DateTime::ATOM),
-    $slotEnd->format(DateTime::ATOM),
+    $subject,
+    $startLocal,
+    $endLocal,
     $email,
     $name,
     $platform,
-    $userEmail
+    $userEmail,
+    $userTzName   // pass host IANA tz so we can map to Windows inside the function
 );
 
-
 // Send confirmation email to you
-// $adminEmail = $config['notification_email'] ?? null;
 $adminEmail = $userData['email'] ?? $userEmail;
 if ($adminEmail) {
     $platformLabels = [
@@ -103,7 +172,7 @@ if ($adminEmail) {
 New appointment booked:
 
 Type: {$event['label']}
-Time: {$slot}
+Time: {$slotDisplay}
 Attendee: {$name} <{$email}>
 Platform: {$platformDisplay}
 EOD;
@@ -133,7 +202,7 @@ include 'header.php'; ?>
             <h2 class="mb-3">You're booked!</h2>
             <p class="lead">
                 You have scheduled a <strong><?= htmlspecialchars($event['label']) ?></strong><br>
-                on <strong><?= htmlspecialchars($slot) ?></strong><br>
+                on <strong><?= htmlspecialchars($slotDisplay) ?></strong><br>
                 via <strong><?= htmlspecialchars($platformDisplay) ?></strong>.
             </p>
             <p>You’ll receive an email invitation shortly.</p>

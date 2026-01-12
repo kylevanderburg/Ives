@@ -1,5 +1,6 @@
 <?php
-$config = require 'config.php';
+require_once __DIR__ . '/bootstrap.php';
+
 
 $params = [
     'client_id' => $config['client_id'],

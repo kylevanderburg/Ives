@@ -1,7 +1,8 @@
 <?php
 require_once 'vendor/autoload.php';
 
-$config = require 'config.php';
+require_once __DIR__ . '/bootstrap.php';
+
 
 if (!isset($_GET['code'])) {
     echo "Authorization code not found.";

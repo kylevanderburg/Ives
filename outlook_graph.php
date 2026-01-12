@@ -33,10 +33,22 @@ function getAccessToken($userEmail) {
         ]);
 
         $newToken = json_decode($response->getBody(), true);
-        $newToken['expires_at'] = time() + $newToken['expires_in'];
+        $newToken['expires_at'] = time() + ($newToken['expires_in'] ?? 0);
+
+        // Preserve refresh_token if not returned
+        if (empty($newToken['refresh_token']) && !empty($tokenData['refresh_token'])) {
+            $newToken['refresh_token'] = $tokenData['refresh_token'];
+        }
+
+        // Preserve scope if not returned (optional but tidy)
+        if (empty($newToken['scope']) && !empty($tokenData['scope'])) {
+            $newToken['scope'] = $tokenData['scope'];
+        }
 
         file_put_contents($tokenFile, json_encode($newToken));
         $accessToken = $newToken['access_token'];
+        $tokenData = $newToken; // keep in-memory consistent
+
     }
 
     $tokenData['access_token'] = $accessToken;
@@ -46,6 +58,8 @@ function getAccessToken($userEmail) {
 
 // ✅ Fetch busy time ranges for a user
 function getBusyTimesFromGraph($start, $end, $userEmail) {
+    $hostTz = new DateTimeZone($config['timezone'] ?? 'America/Chicago');
+
     $tokenData = getAccessToken($userEmail);
     $accessToken = $tokenData['access_token'];
     $client = new Client();
@@ -64,17 +78,30 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
     $data = json_decode($response->getBody(), true);
     $busy = [];
 
-    foreach ($data['value'] as $event) {
+    $parseGraphDateTime = function (string $dt, ?string $tzName): DateTimeImmutable {
+        $tzName = $tzName ?: 'UTC';
+
+        // If dt already has timezone info, parse as-is
+        if (preg_match('/(Z|[+\-]\d{2}:\d{2})$/', $dt)) {
+            return new DateTimeImmutable($dt);
+        }
+
+        // Otherwise interpret dt in the supplied timezone
+        return new DateTimeImmutable($dt, new DateTimeZone($tzName));
+    };
+
+
+    foreach (($data['value'] ?? []) as $event) {
         // Skip events marked as "free"
         if (isset($event['showAs']) && strtolower($event['showAs']) === 'free') {
             continue;
         }
     
-        $startUtc = new DateTime($event['start']['dateTime'], new DateTimeZone($event['start']['timeZone'] ?? 'UTC'));
-        $endUtc = new DateTime($event['end']['dateTime'], new DateTimeZone($event['end']['timeZone'] ?? 'UTC'));
-    
-        $start = $startUtc->setTimezone(new DateTimeZone('America/Chicago'));
-        $end = $endUtc->setTimezone(new DateTimeZone('America/Chicago'));
+        $startDT = $parseGraphDateTime($event['start']['dateTime'], $event['start']['timeZone'] ?? 'UTC');
+        $endDT   = $parseGraphDateTime($event['end']['dateTime'],   $event['end']['timeZone'] ?? 'UTC');
+
+        $start = $startDT->setTimezone($hostTz);
+        $end   = $endDT->setTimezone($hostTz);
     
         $busy[] = [
             'start' => $start,
@@ -87,27 +114,40 @@ function getBusyTimesFromGraph($start, $end, $userEmail) {
     return $busy;
 }
 
+function ianaToWindowsTz(string $iana): string {
+    static $map = [
+        'America/Chicago'    => 'Central Standard Time',
+        'America/New_York'   => 'Eastern Standard Time',
+        'America/Denver'     => 'Mountain Standard Time',
+        'America/Los_Angeles'=> 'Pacific Standard Time',
+        'America/Phoenix'    => 'US Mountain Standard Time',
+        'America/Anchorage'  => 'Alaskan Standard Time',
+        'Pacific/Honolulu'   => 'Hawaiian Standard Time',
+        'UTC'                => 'UTC',
+        'Etc/UTC'            => 'UTC',
+    ];
+
+    return $map[$iana] ?? 'UTC'; // safe fallback
+}
+
+
 // ✅ Create a calendar event for a user
-function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName, $platform, $userEmail) {
+function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName, $platform, $userEmail, $ianaTz = 'America/Chicago') {
     $tokenData = getAccessToken($userEmail);
     $accessToken = $tokenData['access_token'];
     $client = new Client();
-    $config = require __DIR__ . '/config.php';
+    global $config;
+
+    // Map IANA -> Windows (Graph/Outlook uses Windows timezone IDs)
+    $windowsTz = ianaToWindowsTz($ianaTz);
 
     $eventData = [
         'subject' => $subject,
-        'start' => ['dateTime' => $start, 'timeZone' => 'America/Chicago'],
-        'end' => ['dateTime' => $end, 'timeZone' => 'America/Chicago'],
+        'start' => ['dateTime' => $start, 'timeZone' => $windowsTz],
+        'end'   => ['dateTime' => $end,   'timeZone' => $windowsTz],
         'attendees' => [[
             'emailAddress' => ['address' => $attendeeEmail, 'name' => $attendeeName],
             'type' => 'required'
-        ],
-        [
-            'emailAddress' => [
-                'address' => $userEmail,
-                'name' => $config['app_name'] ?? 'Calendar Owner'
-            ],
-            'type' => 'optional'
         ]]
     ];
 
@@ -137,20 +177,19 @@ function createGraphEvent($subject, $start, $end, $attendeeEmail, $attendeeName,
     ]);
 }
 
+
 // ✅ Send an email using the user's mailbox
 function sendGraphEmail($fromEmail, $toEmail, $subject, $bodyText) {
-    $config = require __DIR__ . '/config.php';
+    global $config;
+
     $client = new \GuzzleHttp\Client();
     $tokenData = getAccessToken($fromEmail);
+    $accessToken = $tokenData['access_token'] ?? null;
 
-    // Check if token includes Mail.Send
-    if (!in_array('Mail.Send', $tokenData['scopes'])) {
-        // Fallback to Postmark
+    if (!$accessToken) {
         sendAdminEmail($toEmail, $subject, $bodyText);
         return;
     }
-
-    $accessToken = $tokenData['access_token'];
 
     $emailData = [
         'message' => [
@@ -160,31 +199,32 @@ function sendGraphEmail($fromEmail, $toEmail, $subject, $bodyText) {
                 'content' => $bodyText
             ],
             'toRecipients' => [[
-                'emailAddress' => [
-                    'address' => $toEmail
-                ]
+                'emailAddress' => ['address' => $toEmail]
             ]]
         ],
         'saveToSentItems' => true
     ];
 
     try {
-        $client->post('https://graph.microsoft.com/v1.0/me/sendMail', [
+        // NOTE: double quotes so {$fromEmail} interpolates
+        $client->post("https://graph.microsoft.com/v1.0/users/{$fromEmail}/sendMail", [
             'headers' => [
-                'Authorization' => "Bearer $accessToken",
+                'Authorization' => "Bearer {$accessToken}",
                 'Content-Type' => 'application/json'
             ],
             'json' => $emailData
         ]);
-    } catch (Exception $e) {
-        error_log("Graph email failed: " . $e->getMessage());
+        return;
+    } catch (\Exception $e) {
+        error_log("Graph email failed ({$fromEmail} -> {$toEmail}): " . $e->getMessage());
         sendAdminEmail($toEmail, $subject, $bodyText);
     }
 }
 
 
+
 function sendAdminEmail($toEmail, $subject, $bodyText) {
-    $config = require __DIR__ . '/config.php';
+    global $config;
     $client = new \GuzzleHttp\Client();
 
     $postData = [
